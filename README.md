@@ -40,6 +40,16 @@ class WithLocaleExtensionTest {
 }
 ```
 
+You can also annotate the test class to apply the extension (and the same set of locales) to multiple `@TestTemplate` methods:
+
+```kotlin
+@WithLocale("de-DE", "en-US")
+class ClassLevelWithLocaleExtensionTest {
+    @TestTemplate
+    fun `class level annotation provides locales`(locale: Locale) { /* ... */ }
+}
+```
+
 If no tags are provided, the current default locale is used once.
 
 ## Local development

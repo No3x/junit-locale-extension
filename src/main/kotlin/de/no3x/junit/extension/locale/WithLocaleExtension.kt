@@ -1,8 +1,11 @@
 package de.no3x.junit.extension.locale
 
 import org.junit.jupiter.api.extension.*
-import java.util.*
+import org.junit.platform.commons.PreconditionViolationException
+import org.junit.platform.commons.support.AnnotationSupport
+import java.util.Locale
 import java.util.stream.Stream
+import kotlin.streams.asStream
 
 /**
  * JUnit 5 extension that temporarily switches the default locale for a test method
@@ -10,18 +13,29 @@ import java.util.stream.Stream
  * with that locale set as the default.
  */
 class WithLocaleExtension : TestTemplateInvocationContextProvider {
+
     override fun supportsTestTemplate(context: ExtensionContext): Boolean =
-        context.testMethod.map { it.isAnnotationPresent(WithLocale::class.java) }.orElse(false)
+        findWithLocaleAnnotation(context).isPresent
 
     override fun provideTestTemplateInvocationContexts(context: ExtensionContext): Stream<TestTemplateInvocationContext> {
-        val annotation = context.requiredTestMethod.getAnnotation(WithLocale::class.java)
-        val languageTags = if (annotation.value.isNotEmpty()) annotation.value else arrayOf(Locale.getDefault().toLanguageTag())
+        val annotation = findWithLocaleAnnotation(context).orElseThrow {
+            PreconditionViolationException("@WithLocale must be present on the test method or class")
+        }
 
-        return languageTags.asSequence()
+        val languageTags = annotation.value
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .ifEmpty { sequenceOf(Locale.getDefault().toLanguageTag()) }
+
+        return languageTags
             .map { tag -> LocaleTemplateContext(tag) as TestTemplateInvocationContext }
-            .toList()
-            .stream()
+            .asStream()
     }
+
+    private fun findWithLocaleAnnotation(context: ExtensionContext) =
+        AnnotationSupport.findAnnotation(context.testMethod, WithLocale::class.java)
+            .or { AnnotationSupport.findAnnotation(context.testClass, WithLocale::class.java) }
 
     private class LocaleTemplateContext(private val languageTag: String) : TestTemplateInvocationContext {
         override fun getDisplayName(invocationIndex: Int): String = "locale=$languageTag"
@@ -56,13 +70,13 @@ class WithLocaleExtension : TestTemplateInvocationContextProvider {
     private class LocaleParameterResolver(private val languageTag: String) : ParameterResolver {
         override fun supportsParameter(parameterContext: ParameterContext, extensionContext: ExtensionContext): Boolean {
             val type = parameterContext.parameter.type
-            return type == String::class.java || type == Locale::class.java
+            return setOf(String::class.java, Locale::class.java).any { it.isAssignableFrom(type) }
         }
 
         override fun resolveParameter(parameterContext: ParameterContext, extensionContext: ExtensionContext): Any =
-            when (parameterContext.parameter.type) {
-                String::class.java -> languageTag
-                Locale::class.java -> Locale.forLanguageTag(languageTag)
+            when {
+                String::class.java.isAssignableFrom(parameterContext.parameter.type) -> languageTag
+                Locale::class.java.isAssignableFrom(parameterContext.parameter.type) -> Locale.forLanguageTag(languageTag)
                 else -> throw ParameterResolutionException("Unsupported parameter type ${parameterContext.parameter.type}")
             }
     }
