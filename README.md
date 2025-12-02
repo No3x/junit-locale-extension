@@ -4,11 +4,16 @@ JUnit 5 test template extension that re-runs a test for each provided locale and
 
 ## Usage
 
-Add the JitPack repository and the dependency (replace `TAG` with a git tag or commit hash, e.g. `0.1.0`):
+Add the JitPack repository and the dependency (use a git tag or commit hash, e.g. `1.0.0`):
 
+Add it in your settings.gradle.kts at the end of repositories:
 ```kotlin
-repositories {
-    maven { url = uri("https://jitpack.io") }
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
 }
 
 dependencies {
