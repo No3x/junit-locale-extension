@@ -3,8 +3,7 @@ package de.no3x.junit.extension.locale
 import org.junit.jupiter.api.extension.*
 import org.junit.platform.commons.PreconditionViolationException
 import org.junit.platform.commons.support.AnnotationSupport
-import java.util.Locale
-import java.util.concurrent.locks.ReentrantLock
+import java.util.*
 import java.util.stream.Stream
 import kotlin.streams.asStream
 
@@ -50,21 +49,17 @@ class WithLocaleExtension : TestTemplateInvocationContextProvider {
 
     private class LocaleSettingCallback(private val languageTag: String) : BeforeEachCallback, AfterEachCallback {
         override fun beforeEach(context: ExtensionContext) {
-            val lock = getLocaleLock(context)
-            lock.lock()
             val store = context.getStore(contextNamespace(context))
+            // remember previous default Locale for this test invocation
             store.put(PREVIOUS_KEY, Locale.getDefault())
             Locale.setDefault(Locale.forLanguageTag(languageTag))
         }
 
         override fun afterEach(context: ExtensionContext) {
-            val lock = getLocaleLock(context)
-            try {
-                val store = context.getStore(contextNamespace(context))
-                (store.get(PREVIOUS_KEY, Locale::class.java))?.let { Locale.setDefault(it) }
-                store.remove(PREVIOUS_KEY)
-            } finally {
-                lock.unlock()
+            val store = context.getStore(contextNamespace(context))
+            val previous = store.remove(PREVIOUS_KEY, Locale::class.java)
+            if (previous != null) {
+                Locale.setDefault(previous)
             }
         }
     }
@@ -90,16 +85,7 @@ class WithLocaleExtension : TestTemplateInvocationContextProvider {
     }
 
     private companion object {
-        private const val LOCK_KEY = "locale-default-lock"
         private const val PREVIOUS_KEY = "previous-locale"
-
-        /**
-         * JUnit best practice: store shared mutable state in the root Store instead of static singletons
-         * so it is scoped to the test run and works across different class loaders/test engines.
-         */
-        fun getLocaleLock(context: ExtensionContext): ReentrantLock =
-            context.root.getStore(ExtensionContext.Namespace.GLOBAL)
-                .getOrComputeIfAbsent(LOCK_KEY) { ReentrantLock(true) } as ReentrantLock
 
         fun contextNamespace(context: ExtensionContext): ExtensionContext.Namespace =
             ExtensionContext.Namespace.create(WithLocaleExtension::class.java, context.uniqueId)
